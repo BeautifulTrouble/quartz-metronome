@@ -66,6 +66,8 @@ File pngFile;
 String lastStatus;
 
 // Tasks
+void TaskShowMoney(void *pvParameters);
+TaskHandle_t showMoneyHandle;
 void TaskShowCountdown(void *pvParameters);
 TaskHandle_t showCountdownHandle;
 void TaskShowSlogans(void *pvParameters);
@@ -82,7 +84,9 @@ void TaskPrintCanvas(void *pvParameters);
 void printEqualWidth(String str, int offset) {
   canvas.setFont(&Inconsolata_Black32pt7b);
   for (int i = 0; i < str.length(); i++) {
-    canvas.setCursor(offset + (i * PANEL_WIDTH), 39);
+    int y_offset = 39;
+    if (str[i] == ',') y_offset = 32;
+    canvas.setCursor(offset + (i * PANEL_WIDTH), y_offset);
     canvas.print(str[i]);
   }
 }
@@ -169,7 +173,7 @@ void setup() {
   if (!Rtc.GetIsRunning()){
       clock_log("RTC was not actively running, starting...");
       Rtc.SetIsRunning(true);
-      tv.tv_sec = 1658277376; // Wed, 20 Jul 2022 00:36:13 GMT
+      tv.tv_sec = 1661745275; //Aug 28 2022 11:33 EST
   } else {
       RtcDateTime utc = Rtc.GetDateTime();
       clock_log(String(printf("External RTC Time: %02d:%02d:%02d\n", utc.Hour(), utc.Minute(), utc.Second())));  
@@ -204,6 +208,8 @@ void setup() {
   //xTaskCreatePinnedToCore(TaskLoopAnimation, "TaskLoopAnimation", 4096, NULL, 1, &loopAnimationHandle, 0);
   xTaskCreatePinnedToCore(TaskShowCountdown, "TaskShowCountdown", 4096, NULL, 1, &showCountdownHandle, 0);
   vTaskSuspend(showCountdownHandle);
+  xTaskCreatePinnedToCore(TaskShowMoney, "TaskShowMoney", 4096, NULL, 1, &showMoneyHandle, 0);
+  vTaskSuspend(showMoneyHandle);
   xTaskCreatePinnedToCore(TaskShowSlogans, "TaskShowSlogans", 4096, NULL, 1, &showSlogansHandle, 0);
   // Brightness control, 0 is Full On, 255 is Full Off
   analogWrite(OUTPUT_ENABLE_PIN, 32);
@@ -312,6 +318,37 @@ void TaskShowCountdown(void *pvParameters) {
   }
 }
 
+// Show Me The Money
+void TaskShowMoney(void *pvParameters) {
+  (void) pvParameters;
+  struct tm tm;
+  getLocalTime(&tm);
+  struct tm deadline = {0};
+  strptime("2020-01-01 00:00:00", "%Y-%m-%d %H:%M:%S", &deadline);
+  time_t started_time = mktime(&tm);
+  
+  while (1) {
+    getLocalTime(&tm);
+    long time_elapsed = difftime(mktime(&tm), mktime(&deadline));
+    double money_owed = time_elapsed * 4.71408520521309e-8 + 29.754;
+    String money_owed_string = String(money_owed, 12);
+    String money_string = "$" + money_owed_string.substring(0,2) + "," + money_owed_string.substring(3,6) + "," + money_owed_string.substring(6,9) + "," + money_owed_string.substring(9,12);
+
+    canvas.fillScreen(0);
+    printEqualWidth(money_string, 0);
+    transferCanvasToBuffer();
+    vTaskDelay(100);
+
+    time_t current_time = mktime(&tm);
+    if ((current_time - started_time) > 15) {
+      vTaskResume(showSlogansHandle);
+      vTaskSuspend(showMoneyHandle);
+      getLocalTime(&tm);
+      started_time = mktime(&tm);
+    }
+  }
+}
+
 // Blinks the Slogans into the display
 void TaskShowSlogans(void *pvParameters) {
   (void) pvParameters;
@@ -322,10 +359,8 @@ void TaskShowSlogans(void *pvParameters) {
     transferCanvasToBuffer();
     vTaskDelay(5000);
     
-    canvas.fillScreen(0);
-    printEqualWidth("$33,699,XXX,XXX", 0);
-    transferCanvasToBuffer();
-    vTaskDelay(15000);
+    vTaskResume(showMoneyHandle);
+    vTaskSuspend(showSlogansHandle);
 
     canvas.fillScreen(0);
     printHalfHeight("OVER $33 TRILLION", 7, true);
@@ -345,7 +380,7 @@ void TaskShowSlogans(void *pvParameters) {
     
     canvas.fillScreen(0);
     printEqualWidth("Let", 0);
-    printEqualWidth("'s #ActInTime", 2);
+    printEqualWidth("'s #ActInTime", 96);
     transferCanvasToBuffer();
     vTaskDelay(5000);
 
