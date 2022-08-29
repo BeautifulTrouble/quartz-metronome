@@ -380,7 +380,7 @@ void TaskShowSlogans(void *pvParameters) {
     
     canvas.fillScreen(0);
     printEqualWidth("Let", 0);
-    printEqualWidth("'s #ActInTime", 96);
+    printEqualWidth("'s #ActInTime", 64);
     transferCanvasToBuffer();
     vTaskDelay(5000);
 
